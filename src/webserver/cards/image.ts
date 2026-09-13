@@ -108,7 +108,7 @@ export function registerImageCardTypes(
             "e.g. binary_sensor.front_door_motion", ["binary_sensor", "event"]);
         const help = document.createElement("p");
         help.className = "sp-setting-note";
-        help.textContent = "While expanded, activity refreshes the image every 5 seconds for 30 seconds. Further activations extend the window. The return-home timeout still applies.";
+        help.textContent = "While the image is expanded, activity triggers refreshes every 5 seconds for 30 seconds. New activity restarts this period. The return-home timeout still applies.";
         panel.appendChild(refresh.field);
         panel.appendChild(interval.field);
         panel.appendChild(trigger.field);
