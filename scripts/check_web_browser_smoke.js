@@ -3127,11 +3127,15 @@ async function assertCameraRefreshSettings(page, posts, label) {
   await page.getByRole("button", { name: "Camera Card card type", exact: true }).click();
   await page.locator("#sp-inp-entity").fill("camera.front_door");
   await page.locator("#sp-inp-entity").dispatchEvent("change");
-  await page.locator(".sp-settings-modal .sp-disclosure").filter({ hasText: "Modal Settings" })
+  await page.locator(".sp-settings-modal .sp-disclosure").filter({ hasText: "Refresh Settings" })
     .locator("> .sp-disclosure-button").click();
   const mode = page.locator("#sp-inp-image-refresh-mode");
   const interval = page.locator("#sp-inp-image-refresh-interval");
   const trigger = page.locator("#sp-inp-image-refresh-trigger");
+  assert.strictEqual(await page.locator(".sp-settings-modal .sp-disclosure").filter({ hasText: "Modal Settings" })
+    .locator("#sp-inp-image-refresh-mode").count(), 0,
+    `${label}: refresh controls must sit outside Modal Settings`);
+  assert(await page.getByText("Activity refreshes the visible card or expanded image", { exact: false }).count() === 1);
   assert.strictEqual(await mode.inputValue(), "off", `${label}: camera refresh is opt-in`);
   assert(!(await interval.isVisible()));
   await mode.selectOption("periodic");

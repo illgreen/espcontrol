@@ -31,7 +31,7 @@
     },
     {
       "name": "image_modal_refresh_mode",
-      "label": "Expanded view refresh",
+      "label": "Camera refresh",
       "kind": "choice",
       "values": [
         "off",

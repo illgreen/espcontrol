@@ -126,4 +126,24 @@ int main() {
   activity.activate(near_wrap);
   assert(activity.enabled(near_wrap + 29999));
   assert(!activity.enabled(near_wrap + 30000));
+  // The same window/cooldown follows the camera between tile and expanded view.
+  activity.begin(1000, false);
+  activity.activate(1000);
+  activity.finished(2000, true);
+  activity.enter_expanded(3000, true);
+  assert(activity.window_end == 31000 && activity.next_due == 7000);
+  activity.started();
+  activity.leave_expanded();
+  assert(activity.open && !activity.in_flight && activity.window_end == 31000);
+  assert(!activity.due(6999, true) && activity.due(7000, true));
+  activity.enter_expanded(32000, true);
+  assert(!activity.enabled(32000)); // Reopening sustained motion cannot revive expiry.
+  activity.close();
+  activity.begin(40000, false);
+  activity.enter_expanded(41000, true);
+  assert(activity.window_end == 71000); // First opening with a known-on baseline.
+  periodic.enter_expanded(1000, false);
+  periodic.leave_expanded();
+  assert(!periodic.open);
+
 }

@@ -89,16 +89,18 @@ export function registerImageCardTypes(
         });
         syncIconField();
     }
-    function renderImageModalSettings(this: any, panel?: any, b?: any, helpers?: any, entityInput?: any) {
+    function renderImageModalSettings(this: any, panel?: any, b?: any, helpers?: any) {
         var modeField: any = helpers.selectField("Expanded Image", helpers.idPrefix + "image-modal-mode", imageModalModeOptions(), imageModalMode(b));
         panel.appendChild(modeField.field);
         modeField.select.addEventListener("change", function (this: any) {
             setImageModalMode(b, this.value);
             helpers.saveField("options", b.options);
         });
+    }
+    function renderImageRefreshSettings(panel: any, b: any, helpers: any, entityInput: any, refreshPanel: any) {
         const isCamera = () => String(b.entity || "").startsWith("camera.");
-        const refresh = helpers.selectField("Expanded view refresh", helpers.idPrefix + "image-refresh-mode", [
-            ["off", "Off"], ["periodic", "Periodic"], ["activity", "On activity"],
+        const refresh = helpers.selectField("Camera refresh", helpers.idPrefix + "image-refresh-mode", [
+            ["off", "Off"], ["periodic", "Periodic (expanded view)"], ["activity", "On activity"],
         ], configOptionValue(b.options, "image_modal_refresh_mode") || "off");
         const interval = helpers.selectField("Refresh interval", helpers.idPrefix + "image-refresh-interval", [
             ["5", "5 seconds"], ["10", "10 seconds"], ["30", "30 seconds"],
@@ -108,7 +110,7 @@ export function registerImageCardTypes(
             "e.g. binary_sensor.front_door_motion", ["binary_sensor", "event"]);
         const help = document.createElement("p");
         help.className = "sp-setting-note";
-        help.textContent = "While the image is expanded, activity triggers refreshes every 5 seconds for 30 seconds. New activity restarts this period. The return-home timeout still applies.";
+        help.textContent = "Activity refreshes the visible card or expanded image every 5 seconds for 30 seconds. New activity restarts this period. Refreshing stops when the card is hidden. The return-home timeout still applies.";
         panel.appendChild(refresh.field);
         panel.appendChild(interval.field);
         panel.appendChild(trigger.field);
@@ -116,6 +118,7 @@ export function registerImageCardTypes(
         helpers.requireField(trigger.input, "Choose a binary sensor or event entity for activity refresh.",
             () => isCamera() && refresh.select.value === "activity", (value: string) => validImageRefreshTrigger(value.trim()));
         function syncVisibility() {
+            refreshPanel.hidden = !isCamera();
             refresh.field.hidden = !isCamera();
             interval.field.hidden = !isCamera() || refresh.select.value !== "periodic";
             trigger.field.hidden = help.hidden = !isCamera() || refresh.select.value !== "activity";
@@ -178,8 +181,11 @@ export function registerImageCardTypes(
             nameField.field.setAttribute("data-sp-card-primary", "name");
             renderImageLabelSettings(panel, b, helpers);
             var modalSettingsDisclosure: any = helpers.disclosureSection("Modal Settings", helpers.idPrefix + "image-modal-settings", false);
-            renderImageModalSettings(modalSettingsDisclosure.section, b, helpers, entityField.input);
+            renderImageModalSettings(modalSettingsDisclosure.section, b, helpers);
             panel.appendChild(modalSettingsDisclosure.panel);
+            const refreshSettings = helpers.disclosureSection("Refresh Settings", helpers.idPrefix + "image-refresh-settings", false);
+            renderImageRefreshSettings(refreshSettings.section, b, helpers, entityField.input, refreshSettings.panel);
+            panel.appendChild(refreshSettings.panel);
         },
         renderPreview: function (this: any, b?: any, helpers?: any) {
             var tertiaryColor: any = WEB_UI_COLORS.tertiary;

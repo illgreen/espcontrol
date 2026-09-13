@@ -3742,7 +3742,7 @@ export const CARD_CONTRACT_CARDS: Readonly<Record<string, CardTypeSpec>> = {
       },
       {
         "name": "image_modal_refresh_mode",
-        "label": "Expanded view refresh",
+        "label": "Camera refresh",
         "kind": "choice",
         "values": [
           "off",

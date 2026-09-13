@@ -58,7 +58,7 @@ struct ActivityTrigger {
   bool on(uint32_t epoch) const { return baselined && connection == epoch && previous == "on"; }
 };
 
-// All deadlines use wrap-safe millis arithmetic; only the expanded view owns a schedule.
+// One wrap-safe schedule follows a visible camera across tile and expanded views.
 struct RefreshSchedule {
   RefreshMode mode = RefreshMode::OFF;
   uint32_t interval_ms = 10000;
@@ -81,6 +81,14 @@ struct RefreshSchedule {
     open = true;
     next_due = now;
     if (sensor_on) activate(now);
+  }
+  void enter_expanded(uint32_t now, bool sensor_on) {
+    if (mode != RefreshMode::ACTIVITY || !open) begin(now, sensor_on);
+    else if (!window && sensor_on) activate(now);
+  }
+  void leave_expanded() {
+    if (mode == RefreshMode::ACTIVITY) in_flight = false;
+    else close();
   }
   void activate(uint32_t now) {
     if (!open || mode != RefreshMode::ACTIVITY) return;

@@ -38,19 +38,21 @@ If your Home Assistant instance uses a custom port, open **Settings > System > H
 - If the image cannot be loaded, the card shows **Loading**, **Unavailable**, **Configure**, or **Too many** instead of leaving a blank tile.
 - Camera cards can be used on the main page or inside subpages.
 
-## Refreshing the Expanded Camera View
+## Refreshing Camera Images
 
-For a `camera.*` entity, open **Modal Settings > Expanded view refresh**:
+For a `camera.*` entity, open **Refresh Settings > Camera refresh**:
 
 | Mode | Behaviour |
 |---|---|
 | **Off** (default) | Keeps the existing updates from Home Assistant and the image request when opening the camera. |
 | **Periodic** | Downloads another snapshot while expanded. Choose **5**, **10** (default), or **30 seconds** between completed downloads and the next request. |
-| **On activity** | A trigger starts a **30-second** window with **5 seconds** between a completed download and the next request. Another activation extends the window. |
+| **On activity** | A trigger refreshes the visible card or expanded image for **30 seconds**, with **5 seconds** between a completed download and the next request. Another activation restarts that period. |
 
 For **On activity**, select a **Trigger entity** such as `binary_sensor.front_door_motion` or `event.front_door_doorbell`. Binary sensors trigger when they change from off to on. Event entities trigger when a new event occurs; every event type on the selected entity counts. Opening while a binary sensor is already on starts one window. Remaining on does not extend it indefinitely.
 
-These modes only refresh a camera you have already opened. They do not open the camera or wake the screen. Closing the view stops refreshing, and background downloads do not extend **Home Screen Timeout**. Old doorbell events are not replayed after reconnecting.
+Periodic refresh runs only while the camera is expanded. On activity also refreshes the camera card while it is visible on the main page or a subpage. Opening or closing the expanded view keeps the current activity window; it does not restart the 30 seconds. Leaving the page, covering the card with another modal, or entering the screensaver stops activity refreshes. Events received while hidden do not queue refreshes for later.
+
+Refreshes do not open the camera, wake the screen, or extend **Home Screen Timeout**. Old doorbell events are not replayed after reconnecting.
 
 The previous image stays visible while the next snapshot loads. Slow downloads never overlap; failures increase the retry delay. A camera integration may return a cached snapshot, so the selected interval does not guarantee a newer picture every time.
 
