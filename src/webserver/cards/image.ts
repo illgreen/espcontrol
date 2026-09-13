@@ -65,26 +65,12 @@ export function registerImageCardTypes(
         iconField.classList.add("sp-cond-field");
         var labelToggle: any = helpers.toggleRow("Show Label", helpers.idPrefix + "image-label-toggle", imageLabelEnabled(b));
         panel.appendChild(labelToggle.row);
-        var labelField: any = helpers.renderCardTextField(panel, b, helpers, {
-            text: {
-                label: "Label",
-                idSuffix: "image-label",
-                placeholder: "Uses entity name when blank",
-                bindName: "label",
-                rerender: true,
-            },
-        });
-        function syncLabelField(this: any) {
-            labelField.field.hidden = !imageLabelEnabled(b);
-        }
         function syncIconField(this: any) {
             iconField.classList.toggle("sp-visible", imageIconEnabled(b));
         }
         labelToggle.input.addEventListener("change", function (this: any) {
             setImageLabelEnabled(b, this.checked);
             helpers.saveField("options", b.options);
-            helpers.saveField("label", b.label);
-            syncLabelField();
             renderPreview();
         });
         iconToggle.input.addEventListener("change", function (this: any) {
@@ -101,7 +87,6 @@ export function registerImageCardTypes(
             syncIconField();
             renderPreview();
         });
-        syncLabelField();
         syncIconField();
     }
     function renderImageModalSettings(this: any, panel?: any, b?: any, helpers?: any, entityInput?: any) {
@@ -181,9 +166,16 @@ export function registerImageCardTypes(
             b.unit = "";
             b.precision = "";
             b.options = normalizeImageOptions(b.options, b.entity, true);
-            if (!imageLabelEnabled(b))
-                b.label = "";
             const entityField = helpers.renderCardEntityField(panel, b, helpers, IMAGE_CARD_METADATA);
+            var nameField: any = helpers.renderCardTextField(panel, b, helpers, {
+                text: {
+                    label: "Name",
+                    idSuffix: "image-name",
+                    bindName: "label",
+                    rerender: true,
+                },
+            });
+            nameField.field.setAttribute("data-sp-card-primary", "name");
             renderImageLabelSettings(panel, b, helpers);
             var modalSettingsDisclosure: any = helpers.disclosureSection("Modal Settings", helpers.idPrefix + "image-modal-settings", false);
             renderImageModalSettings(modalSettingsDisclosure.section, b, helpers, entityField.input);

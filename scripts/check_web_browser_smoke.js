@@ -219,7 +219,10 @@ async function installRoutes(context, slug, options = {}) {
     const requestUrl = new URL(route.request().url());
     if (requestUrl.hostname === "espcontrol.test" && requestUrl.pathname === "/api/v1/reset") {
       const reset = options.resetState;
-      if (!reset) { await route.fulfill({ status: 404, body: "unsupported" }); return; }
+      if (!reset) {
+        await route.abort("connectionclosed");
+        throw new Error("Legacy firmware must never receive a reset status request");
+      }
       if (route.request().method() === "POST") {
         assert.strictEqual(route.request().headers()["x-espcontrol-request"], "reset");
         assert.strictEqual(route.request().headers()["x-espcontrol-epoch"], String(reset.epoch));
@@ -301,6 +304,8 @@ async function installRoutes(context, slug, options = {}) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
+          api: { version: 1 },
+          reset: options.resetState ? { modes: ["customization", "factory"], status: "/api/v1/reset" } : undefined,
           identity: options.identityState ? { version: 1 } : undefined,
           configuration: { read: true, write: true, document_versions: [1] },
           web_assets: { versions: [1] },
@@ -317,6 +322,8 @@ async function installRoutes(context, slug, options = {}) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
+          api: { version: 1 },
+          reset: options.resetState ? { modes: ["customization", "factory"], status: "/api/v1/reset" } : undefined,
           identity: options.identityState ? { version: 1 } : undefined,
           configuration: { read: false, write: false, document_versions: [] },
         }),
@@ -425,6 +432,7 @@ async function installRoutes(context, slug, options = {}) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
+          headers: { "Access-Control-Allow-Origin": "*" },
           body: JSON.stringify(publicFirmwareManifest(slug)),
         });
         return;
@@ -433,6 +441,7 @@ async function installRoutes(context, slug, options = {}) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
+          headers: { "Access-Control-Allow-Origin": "*" },
           body: JSON.stringify(publicFirmwareVersions(slug)),
         });
         return;
@@ -2709,11 +2718,11 @@ async function assertAllCardSettingsGrouped(page, posts, label) {
     );
     assert(
       result.primaryKinds.every((kind) =>
-        ["card", "type", "entity"].includes(kind),
+        ["card", "type", "name", "entity"].includes(kind),
       ),
-      `${label}: ${context} should only expose Card, Type, and Entity primary fields`,
+      `${label}: ${context} should only expose Card, Type, Name, and Entity primary fields`,
     );
-    for (const kind of ["type", "entity"]) {
+    for (const kind of ["type", "name", "entity"]) {
       assert(
         result.primaryKinds.filter((value) => value === kind).length <= 1,
         `${label}: ${context} should expose at most one ${kind} field outside groups`,
@@ -2734,6 +2743,17 @@ async function assertAllCardSettingsGrouped(page, posts, label) {
   for (const cardOption of cardOptions) {
     await page.locator("#sp-inp-type").selectOption(cardOption.value);
     await assertGrouped(cardOption.label);
+
+    if (cardOption.value === "wifi_qr") {
+      const name = page.locator('.sp-settings-modal .sp-panel > [data-sp-card-primary="name"]');
+      assert(await name.isVisible(), `${label}: Wifi Name should be outside Card Settings`);
+      assert.strictEqual(await name.locator("label").textContent(), "Name");
+      assert.strictEqual(
+        await name.evaluate((field) => field.previousElementSibling.getAttribute("data-sp-card-primary")),
+        "type",
+        `${label}: Wifi Name should immediately follow Type`,
+      );
+    }
 
     if (cardOption.value === "screen_lock") {
       assert.strictEqual(
@@ -3171,6 +3191,11 @@ async function assertMediaCoverArtSettingsPanels(page, label) {
     `${label}: Media action types should use their concise names`,
   );
 
+  assert(await page.getByLabel("Name", { exact: true }).isVisible(), `${label}: Cover Art should expose Name`);
+  assert(await page.locator("#sp-inp-label").evaluate((input) =>
+    input.closest(".sp-field").previousElementSibling.contains(document.querySelector("#sp-inp-entity")) &&
+    !input.closest(".sp-disclosure")), `${label}: Name should sit directly below Entity outside Card Settings`);
+
   const cardSettings = page.locator(".sp-settings-modal .sp-disclosure").filter({
     has: page.locator("#sp-inp-media-cover-art-card-settings"),
   });
@@ -3445,6 +3470,28 @@ async function assertSpeakerGroupEditorAndPreview(page, posts, label) {
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.waitForSelector(".sp-settings-overlay.sp-visible");
   await page.locator("#sp-inp-media-mode").selectOption("control_modal");
+  assert(await page.getByLabel("Name", { exact: true }).isVisible(), `${label}: All Controls should expose Name`);
+  await page.getByLabel("Name", { exact: true }).fill("Office speakers");
+  await page.getByLabel("Name", { exact: true }).dispatchEvent("change");
+  await page.locator("#sp-inp-media-mode").selectOption("cover_art");
+  assert.strictEqual(await page.getByLabel("Name", { exact: true }).inputValue(), "Office speakers", `${label}: Cover Art should retain the custom modal name`);
+  await page.locator("#sp-inp-media-mode").selectOption("control_modal");
+  assert.strictEqual(await page.getByLabel("Name", { exact: true }).inputValue(), "Office speakers", `${label}: All Controls should retain the custom modal name`);
+  for (const name of ["Media", "Now Playing", "Cover Art", "Speaker Group", "All Controls"]) {
+    await page.getByLabel("Name", { exact: true }).fill(name);
+    await page.getByLabel("Name", { exact: true }).dispatchEvent("change");
+    assert.strictEqual(await page.getByLabel("Name", { exact: true }).inputValue(), name, `${label}: editing Name must preserve ${name}`);
+    for (const mode of ["cover_art", "control_modal"]) {
+      await page.locator("#sp-inp-media-mode").selectOption(mode);
+      assert.strictEqual(await page.getByLabel("Name", { exact: true }).inputValue(), name, `${label}: ${mode} must preserve the explicit name ${name}`);
+    }
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.waitForFunction(() => !document.querySelector(".sp-settings-overlay").classList.contains("sp-visible"));
+    await page.locator('.sp-main [data-slot="4"]').click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.waitForSelector(".sp-settings-overlay.sp-visible");
+    assert.strictEqual(await page.getByLabel("Name", { exact: true }).inputValue(), name, `${label}: reopening All Controls must preserve ${name}`);
+  }
   const advanced = page.locator(".sp-settings-modal .sp-disclosure").filter({
     has: page.locator("#sp-inp-media-advanced"),
   });
@@ -4343,13 +4390,13 @@ async function assertCardTransferSmoke(page, posts, label) {
   );
   assert.strictEqual(
     await copyDialog.getByRole("button", { name: "Copy Code" }).count(),
-    0,
-    `${label}: copy dialog does not show a non-functional copy button`,
+    1,
+    `${label}: copy dialog exposes a clipboard copy button`,
   );
   assert.strictEqual(
     await copyDialog.locator(".sp-transfer-actions").count(),
-    0,
-    `${label}: copy dialog does not show footer actions`,
+    1,
+    `${label}: copy dialog shows footer actions`,
   );
   assert.strictEqual(
     await copyDialog.getByText(/Press (Command|Ctrl)\+C to copy\./).count(),
@@ -4366,6 +4413,40 @@ async function assertCardTransferSmoke(page, posts, label) {
     { start: 0, end: copySelection.length, length: copySelection.length },
     `${label}: card code is selected for manual copying`,
   );
+  for (const mode of ["modern", "http", "denied", "blocked"]) {
+    await page.evaluate((mode) => {
+      window.__copyTestOriginalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+      window.__copyTestOriginalExec = document.execCommand;
+      window.__copiedCode = null;
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: mode === "http" ? undefined : {
+        writeText: async (value) => {
+          if (mode !== "modern") throw new Error("Clipboard permission denied");
+          window.__copiedCode = value;
+        },
+      } });
+      document.execCommand = (command) => {
+        if (command !== "copy" || mode === "blocked") return false;
+        const textarea = document.querySelector(".sp-transfer-code");
+        window.__copiedCode = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd);
+        return true;
+      };
+    }, mode);
+    await copyDialog.getByRole("button", { name: "Copy Code", exact: true }).click();
+    await page.waitForFunction(() => !document.querySelector(".sp-transfer-actions .sp-save-btn").disabled);
+    assert.strictEqual(await copyDialog.getByRole("status").textContent(), mode === "blocked"
+      ? "Could not copy automatically. Copy the selected code manually."
+      : "", `${label}: copying only shows a message when it fails`);
+    assert.strictEqual(await page.evaluate(() => window.__copiedCode), mode === "blocked" ? null : code,
+      `${label}: ${mode} clipboard path copies the exact code or reports failure`);
+    await page.evaluate(() => {
+      if (window.__copyTestOriginalClipboard) Object.defineProperty(navigator, "clipboard", window.__copyTestOriginalClipboard);
+      else delete navigator.clipboard;
+      document.execCommand = window.__copyTestOriginalExec;
+      delete window.__copyTestOriginalClipboard;
+      delete window.__copyTestOriginalExec;
+      delete window.__copiedCode;
+    });
+  }
   const dialogFont = await copyDialog.evaluate((element) => getComputedStyle(element).fontFamily);
   assert(/Inter|Segoe UI|Roboto|sans-serif/i.test(dialogFont), `${label}: copy dialog uses the web UI font stack`);
   const codeFont = await copyDialog.locator("textarea").evaluate((element) => getComputedStyle(element).fontFamily);
@@ -5628,8 +5709,6 @@ async function runCase(browser, testCase) {
 
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
-    // Older firmware legitimately returns 404 for the reset capability probe.
-    if (message.location().url.endsWith("/api/v1/reset") && message.text().includes("404")) return;
     if (message.type() === "error" || message.type() === "warning")
       errors.push(`[${message.type()}] ${message.text()}`);
   });
@@ -5753,6 +5832,49 @@ async function runCase(browser, testCase) {
   } finally {
     await context.close();
   }
+}
+
+async function assertHostedCompatibility(browser) {
+  const testCase = CASES.find(item => item.slug === "guition-esp32-p4-jc8012p4a1-v2");
+  const context = await browser.newContext({ viewport: testCase.viewport });
+  await installRoutes(context, testCase.slug, { nativeState: nativeConfigState(testCase.slug) });
+  await context.addInitScript(() => {
+    const transport = window.fetch.bind(window);
+    window.__compatRequests = [];
+    window.fetch = async (input, init) => {
+      const request = new Request(new URL(String(input), location.href), init);
+      const record = { url: request.url, credentials: request.credentials, status: 0 };
+      window.__compatRequests.push(record);
+      const response = await transport(input, init);
+      record.status = response.status;
+      return response;
+    };
+  });
+  const page = await context.newPage();
+  const unhandled = [];
+  page.on("console", message => { if (message.text().includes("[state] unhandled:")) unhandled.push(message.text()); });
+  await installFakeEventSource(page);
+  try {
+    await page.goto(`http://espcontrol.test/${testCase.slug}?events=1`);
+    await page.waitForSelector("#sp-app");
+    await page.waitForFunction(() => window.__eventSources?.length > 0);
+    await page.evaluate(events => window.__seedEspState(events), seededEvents());
+    await page.waitForFunction(() => ["manifest.json", "versions.json"].every(name =>
+      window.__compatRequests.some(item => item.url.startsWith("https://jtenniswood.github.io/espcontrol/firmware/") && item.url.endsWith(name) && item.status === 200)));
+    const requests = await page.evaluate(() => window.__compatRequests);
+    for (const request of requests.filter(item => item.url.startsWith("https://jtenniswood.github.io/espcontrol/firmware/"))) {
+      assert.equal(request.credentials, "omit", "public metadata must not include browser credentials");
+    }
+    assert(requests.some(item => item.url.endsWith("/espcontrol/version") && item.credentials === "include"), "device state requests retain authentication");
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await page.evaluate(() => window.__seedEspState([
+      { id: "select/Home Assistant Artwork Connection", state: "Manual" },
+      { id: "text_sensor/Home Assistant Artwork Endpoint", state: "Manual — http://ha.test:8123" },
+    ]));
+    assert.equal(await page.locator("#sp-set-ha-artwork-endpoint-mode").inputValue(), "Manual");
+    assert.equal(await page.locator("#sp-ha-artwork-endpoint-status").textContent(), "Manual — http://ha.test:8123");
+    assert(!unhandled.some(message => message.includes("Home Assistant Artwork")), "display-name artwork events are handled");
+  } finally { await context.close(); }
 }
 
 async function assertResetControls(browser) {
@@ -5927,6 +6049,7 @@ async function assertPanelNaming(browser) {
       await assertPageTitleEvents(browser);
       await assertRotationStartupOrdering(browser);
     }
+    await assertHostedCompatibility(browser);
     await assertResetControls(browser);
     for (const testCase of ACTIVE_CASES) {
       if (!acceptanceOnly) await runCase(browser, testCase);

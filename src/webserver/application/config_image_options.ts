@@ -185,8 +185,6 @@ export function createConfigImageOptionsFeature(dependencies: ConfigImageOptions
         if (!b)
             return "";
         b.options = setConfigOption(b.options, IMAGE_LABEL_OPTION, !!enabled);
-        if (!enabled)
-            b.label = "";
         b.options = normalizeImageOptions(b.options, b.entity, true);
         return b.options;
     }
