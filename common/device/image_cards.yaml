@@ -63,3 +63,29 @@ interval:
     then:
       - lambda: |-
           image_card_refresh_due();
+
+  # Custom branch: keep an expanded camera/image reasonably fresh without
+  # turning the panel into a video client.
+  - interval: 5s
+    then:
+      - lambda: |-
+          const auto &display = id(espcontrol_app).display();
+          const bool visible =
+              (display.current_mode_is(espcontrol::DisplayMode::ACTIVE) ||
+               display.current_mode_is(espcontrol::DisplayMode::DIMMED)) &&
+              (display.target_mode_is(espcontrol::DisplayMode::ACTIVE) ||
+               display.target_mode_is(espcontrol::DisplayMode::DIMMED));
+          if (visible) refresh_visible_image_cards_forced(true);
+
+  # The small tile gets a slower refresh so it stays useful without constantly
+  # downloading snapshots in the background.
+  - interval: 10s
+    then:
+      - lambda: |-
+          const auto &display = id(espcontrol_app).display();
+          const bool visible =
+              (display.current_mode_is(espcontrol::DisplayMode::ACTIVE) ||
+               display.current_mode_is(espcontrol::DisplayMode::DIMMED)) &&
+              (display.target_mode_is(espcontrol::DisplayMode::ACTIVE) ||
+               display.target_mode_is(espcontrol::DisplayMode::DIMMED));
+          if (visible) refresh_visible_image_cards_forced(false);
