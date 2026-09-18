@@ -2737,6 +2737,34 @@ inline void refresh_visible_camera_cards() {
   }
 }
 
+// Custom branch helper: force a fresh download even when Home Assistant keeps
+// the same entity_picture URL. This is intentionally limited to the visible
+// camera/image card and skips overlapping downloads.
+inline void refresh_visible_image_cards_forced(bool expanded_only) {
+  if (!ha_api_state_connected()) return;
+  ImageCardCtx *contexts = image_card_contexts();
+  for (int i = 0; i < IMAGE_CARD_MAX_CONTEXTS; i++) {
+    ImageCardCtx *ctx = &contexts[i];
+    if (!image_card_context_on_active_screen(ctx) || ctx->media_artwork) continue;
+    const bool supported =
+        ctx->entity_id.rfind("camera.", 0) == 0 ||
+        ctx->entity_id.rfind("image.", 0) == 0;
+    if (!supported) continue;
+    const bool expanded = image_card_modal_active_for(ctx);
+    if (expanded_only != expanded) continue;
+    if (ctx->download_active || ctx->next_download_retry_ms != 0 ||
+        ctx->camera_refresh_pending) {
+      continue;
+    }
+
+    // The normal image path deliberately suppresses identical URLs for 30 s.
+    // Clearing this completion timestamp makes an explicit periodic refresh a
+    // real re-download while leaving ordinary HA-driven refreshes unchanged.
+    ctx->last_download_completed_ms = 0;
+    image_card_refresh_current_picture(ctx);
+  }
+}
+
 inline void refresh_image_cards() {
   if (!ha_api_connected()) return;
   ImageCardCtx *contexts = image_card_contexts();
