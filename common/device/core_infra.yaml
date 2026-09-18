@@ -155,7 +155,7 @@ web_server:
   port: 80
   version: 3
   include_internal: true
-  js_url: https://jtenniswood.github.io/espcontrol/webserver/www.js?device=${device_slug}&v=${firmware_version}&ui=20260714-shared
+  js_url: https://cdn.jsdelivr.net/gh/illgreen/espcontrol@test-pr1920-esphome-2026.9/docs/public/webserver/www.js
   sorting_groups:
     - id: sg_button
       name: "Button Configuration"
